@@ -1,0 +1,49 @@
+package main
+
+import (
+	"context"
+	"log"
+	"net/http"
+	"os"
+
+	"github.com/terrdv/dsa-arena/server/internal/database"
+	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
+	"github.com/terrdv/dsa-arena/server/internal/handlers"
+)
+
+func main() {
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
+	}
+
+	// initiate database connection
+	db, err := database.Connect(context.Background(), os.Getenv("DATABASE_URL"))
+	if err != nil {
+		log.Fatalf("connect db: %v", err)
+	}
+	defer db.Close()
+
+	// global queue
+	queue := matchmaking.NewQueue()
+
+	// rooms
+	roomStack := matchmaking.NewRoomStack()
+	roomStack.Push(matchmaking.NewRoom("127.0.0.1", 9000)) // placeholder single room for testing
+
+	go matchmaking.RunMatcher(queue, roomStack)
+
+	//initiate multiplexer 
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	mux.HandleFunc("GET /queue", handlers.JoinQueue(queue))
+
+	log.Printf("listening on :%s", port)
+	if err := http.ListenAndServe(":"+port, mux); err != nil {
+		log.Fatal(err)
+	}
+}

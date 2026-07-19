@@ -1,0 +1,14 @@
+# env
+.env
+.env.local
+
+# go
+server/**/*.exe
+server/**/*.test
+server/**/*.out
+
+# leetcode-data cache
+leetcode-data
+
+# os
+.DS_Store
