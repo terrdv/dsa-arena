@@ -9,6 +9,7 @@ import (
 	"github.com/terrdv/dsa-arena/server/internal/database"
 	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
 	"github.com/terrdv/dsa-arena/server/internal/handlers"
+	"github.com/terrdv/dsa-arena/server/internal/cache"
 )
 
 func main() {
@@ -23,6 +24,13 @@ func main() {
 		log.Fatalf("connect db: %v", err)
 	}
 	defer db.Close()
+
+	// redis cache
+	redis, err := cache.Connect(context.Background(), os.Getenv("REDIS_ADDR"))
+	if err != nil {
+		log.Fatalf("connect redis: %v", err)
+	}
+	defer redis.Close()
 
 	// global queue
 	queue := matchmaking.NewQueue()
