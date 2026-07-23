@@ -6,10 +6,7 @@ import (
 )
 
 type MatchmakingPayload struct {
-	MatchID         string `json:"match_id"`
-	ServerIP        string `json:"server_ip"`
-	Port            int    `json:"port"`
-	ConnectionToken string `json:"connection_token"`
+	MatchID string `json:"match_id"`
 }
 
 

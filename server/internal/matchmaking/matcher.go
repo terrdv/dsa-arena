@@ -1,44 +1,52 @@
 package matchmaking
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-func RunMatcher(q *Queue, rooms *RoomStack) {
+func RunMatcher(ctx context.Context, q *Queue, rooms *RoomStore) {
 	for {
 		select {
+		case <-ctx.Done():
+			return
 		case <-q.Signal():
-		case <-rooms.Signal():
-		}
-
-		room, ok := rooms.Pop()
-		if !ok {
-			continue
 		}
 
 		player1, ok := q.Pop()
 		if !ok {
-			rooms.Push(room)
 			continue
 		}
 
 		player2, ok := q.Pop()
 		if !ok {
 			q.Push(player1)
-			rooms.Push(room)
+			continue
+		}
+
+		room := &Room{
+			MatchID:   newID(),
+			Player1ID: player1.PlayerID(),
+			Player2ID: player2.PlayerID(),
+			Status:    "active",
+			StartedAt: time.Now(),
+		}
+
+		if err := rooms.Save(ctx, room); err != nil {
+			log.Println("save room:", err)
+			q.Push(player1)
+			q.Push(player2)
 			continue
 		}
 
 		mp := &MatchmakingPayload{
-			MatchID:         newID(),
-			ServerIP:        room.serverIP,
-			Port:            room.port,
-			ConnectionToken: newID(),
+			MatchID: room.MatchID,
 		}
 
 		payload, err := json.Marshal(mp)

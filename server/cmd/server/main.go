@@ -35,11 +35,10 @@ func main() {
 	// global queue
 	queue := matchmaking.NewQueue()
 
-	// rooms
-	roomStack := matchmaking.NewRoomStack()
-	roomStack.Push(matchmaking.NewRoom("127.0.0.1", 9000)) // placeholder single room for testing
+	// room state store
+	rooms := matchmaking.NewRoomStore(redis)
 
-	go matchmaking.RunMatcher(queue, roomStack)
+	go matchmaking.RunMatcher(context.Background(), queue, rooms)
 
 	//initiate multiplexer 
 	mux := http.NewServeMux()
