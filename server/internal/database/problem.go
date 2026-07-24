@@ -4,40 +4,42 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"time"
 )
 
 
 type Problem struct {
-	ID        int64
-	
-	CreatedAt time.Time
+	ID                  int64
+	Title               string
+	ProblemDescription  string
+	Testcases           []byte
 }
 
-
-func GetProblem(ctx context.Context, db *sql.DB, playerID string) ([]Match, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, player1_id, player2_id, winner_id, status, created_at
-		FROM matches
-		WHERE player1_id = $1 OR player2_id = $1
-		ORDER BY created_at DESC
-	`, playerID)
+func GetProblem(ctx context.Context, db *sql.DB, id int64) (Problem, error) {
+	var p Problem
+	err := db.QueryRowContext(ctx, `
+		SELECT id, title, problem_description, testcases
+		FROM problems
+		WHERE id = $1
+	`, id).Scan(&p.ID, &p.Title, &p.ProblemDescription, &p.Testcases)
 	if err != nil {
-		return nil, fmt.Errorf("query matches for player %s: %w", playerID, err)
-	}
-	defer rows.Close()
-
-	var matches []Match
-	for rows.Next() {
-		var m Match
-		if err := rows.Scan(&m.ID, &m.Player1ID, &m.Player2ID, &m.WinnerID, &m.Status, &m.CreatedAt); err != nil {
-			return nil, fmt.Errorf("scan match: %w", err)
-		}
-		matches = append(matches, m)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate matches: %w", err)
+		return Problem{}, fmt.Errorf("query problem %d: %w", id, err)
 	}
 
-	return matches, nil
+	return p, nil
+}
+
+// RandomProblem returns a uniformly random problem from the problems table.
+func RandomProblem(ctx context.Context, db *sql.DB) (Problem, error) {
+	var p Problem
+	err := db.QueryRowContext(ctx, `
+		SELECT id, title, problem_description, testcases
+		FROM problems
+		ORDER BY random()
+		LIMIT 1
+	`).Scan(&p.ID, &p.Title, &p.ProblemDescription, &p.Testcases)
+	if err != nil {
+		return Problem{}, fmt.Errorf("query random problem: %w", err)
+	}
+
+	return p, nil
 }

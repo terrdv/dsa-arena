@@ -3,15 +3,19 @@ package matchmaking
 import (
 	"context"
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/gorilla/websocket"
+
+	"github.com/terrdv/dsa-arena/server/internal/database"
 )
 
-func RunMatcher(ctx context.Context, q *Queue, rooms *RoomStore) {
+func RunMatcher(ctx context.Context, q *Queue, rooms *RoomStore, db *sql.DB) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -30,10 +34,22 @@ func RunMatcher(ctx context.Context, q *Queue, rooms *RoomStore) {
 			continue
 		}
 
+		problem, err := database.RandomProblem(ctx, db)
+		if err != nil {
+			log.Println("pick random problem:", err)
+			q.Push(player1)
+			q.Push(player2)
+			continue
+		}
+
 		room := &Room{
 			MatchID:   newID(),
 			Player1ID: player1.PlayerID(),
 			Player2ID: player2.PlayerID(),
+			ProblemID:          strconv.FormatInt(problem.ID, 10),
+			ProblemTitle:       problem.Title,
+			ProblemDescription: problem.ProblemDescription,
+			Testcases:          json.RawMessage(problem.Testcases),
 			Status:    "active",
 			StartedAt: time.Now(),
 		}

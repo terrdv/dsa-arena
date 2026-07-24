@@ -10,12 +10,15 @@ import (
 )
 
 type Room struct {
-	MatchID   string    `json:"match_id"`
-	Player1ID string    `json:"player1_id"`
-	Player2ID string    `json:"player2_id"`
-	ProblemID string    `json:"problem_id"`
-	Status    string    `json:"status"` // "active", "finished"
-	StartedAt time.Time `json:"started_at"`
+	MatchID            string          `json:"match_id"`
+	Player1ID          string          `json:"player1_id"`
+	Player2ID          string          `json:"player2_id"`
+	ProblemID          string          `json:"problem_id"`
+	ProblemTitle       string          `json:"problem_title"`
+	ProblemDescription string          `json:"problem_description"` // includes examples
+	Testcases          json.RawMessage `json:"testcases"`
+	Status             string          `json:"status"` // "active", "finished"
+	StartedAt          time.Time       `json:"started_at"`
 }
 
 // roomTTL caps how long a room lives in Redis so abandoned matches clean themselves up.

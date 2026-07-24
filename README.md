@@ -29,6 +29,16 @@ go run ./cmd/server
 
 The server listens on port `8080` by default
 
+## Running the web client
+
+`web/` is a Vite + React app (lobby → matchmaking queue → match room). It proxies `/queue` (WebSocket) and `/room` to the Go server on `:8080`, so run both:
+
+```sh
+cd web
+npm install
+npm run dev    # http://localhost:5173
+```
+
 ## Seeding problems
 
 `data/` is a standalone Go module that loads the LeetCode dataset (`data/leetcode-data/*.jsonl`) into the Postgres `problems` table.
