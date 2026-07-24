@@ -29,3 +29,14 @@ go run ./cmd/server
 
 The server listens on port `8080` by default
 
+## Seeding problems
+
+`data/` is a standalone Go module that loads the LeetCode dataset (`data/leetcode-data/*.jsonl`) into the Postgres `problems` table.
+
+```sh
+cd data
+DATABASE_URL=postgres://... go run .
+```
+
+Reruns are safe — rows are upserted by `id` (the dataset's `question_id`).
+
