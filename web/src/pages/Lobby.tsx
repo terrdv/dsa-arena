@@ -41,7 +41,7 @@ export default function Lobby() {
     saveHandle(name)
     closingRef.current = false
 
-    const ws = new WebSocket(queueSocketURL(name))
+    const ws = new WebSocket(queueSocketURL(name)) // TCP HANDSHAKE
     wsRef.current = ws
     setPhase('searching')
 
