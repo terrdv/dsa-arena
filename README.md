@@ -39,7 +39,7 @@ npm install
 npm run dev    # http://localhost:5173
 ```
 
-## Seeding problems
+## Seeding questions
 
 `data/` is a standalone Go module that loads the LeetCode dataset (`data/leetcode-data/*.jsonl`) into the Postgres `problems` table.
 
@@ -47,6 +47,4 @@ npm run dev    # http://localhost:5173
 cd data
 DATABASE_URL=postgres://... go run .
 ```
-
-Reruns are safe — rows are upserted by `id` (the dataset's `question_id`).
 
