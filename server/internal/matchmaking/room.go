@@ -22,7 +22,7 @@ type Room struct {
 }
 
 // roomTTL caps how long a room lives in Redis so abandoned matches clean themselves up.
-const roomTTL = 2 * time.Hour
+const roomTTL = 1 * time.Hour
 
 type RoomStore struct {
 	rdb *redis.Client

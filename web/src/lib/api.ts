@@ -28,6 +28,45 @@ export function queueSocketURL(playerId: string): string {
   return `${proto}://${window.location.host}/queue?player_id=${encodeURIComponent(playerId)}`
 }
 
+// ---- room session (editor + judge) ---------------------------------------
+//
+// Mirrors sessionClientMsg / sessionServerMsg in server/internal/handlers/session.go.
+// Keep these two files in sync by hand — there's no shared schema.
+
+export type ClientSessionMsg = { type: 'submit'; code: string; language: string }
+
+export type ServerSessionMsg =
+  | { type: 'judging' }
+  | { type: 'result'; passed: number; total: number; failed: string[] }
+  | { type: 'opponent_result'; passed: number; total: number }
+  | { type: 'error'; message: string }
+
+// Goes through the /api proxy (see web/vite.config.ts — its entry needs
+// `ws: true` for the upgrade to pass through), not straight to /room/...
+// like the queue socket does.
+export function roomSessionURL(matchId: string, playerId: string): string {
+  const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
+  return `${proto}://${window.location.host}/api/room/${encodeURIComponent(matchId)}/session?player_id=${encodeURIComponent(playerId)}`
+}
+
+// ---- code drafts (localStorage) -------------------------------------------
+//
+// In-progress code lives only in this browser: nothing server-side needs to
+// see a draft before submit, so there's no server round-trip — see the
+// sessionClientMsg comment in server/internal/handlers/session.go.
+
+function draftKey(matchId: string, playerId: string): string {
+  return `dsa-arena:draft:${matchId}:${playerId}`
+}
+
+export function loadDraft(matchId: string, playerId: string): string | null {
+  return localStorage.getItem(draftKey(matchId, playerId))
+}
+
+export function saveDraft(matchId: string, playerId: string, code: string) {
+  localStorage.setItem(draftKey(matchId, playerId), code)
+}
+
 const HANDLE_KEY = 'dsa-arena:handle'
 
 export function loadHandle(): string {

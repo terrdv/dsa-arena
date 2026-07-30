@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: serverURL,
           changeOrigin: true,
+          // ws: true lets the room session socket upgrade through this
+          // entry (its URL is /api/room/:id/session — see roomSessionURL).
+          ws: true,
           rewrite: (path) => path.replace(/^\/api/, ''),
         },
       },

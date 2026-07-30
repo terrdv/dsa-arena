@@ -37,6 +37,7 @@ func main() {
 
 	// room state store
 	rooms := matchmaking.NewRoomStore(redis)
+	hub := matchmaking.NewHub()
 
 	go matchmaking.RunMatcher(context.Background(), queue, rooms, db)
 
@@ -50,6 +51,7 @@ func main() {
 	mux.HandleFunc("GET /queue", handlers.JoinQueue(queue))
 
 	mux.HandleFunc("GET /room/{match_id}", handlers.GetRoom(rooms))
+	mux.HandleFunc("GET /room/{match_id}/session", handlers.RoomSession(rooms, hub))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {

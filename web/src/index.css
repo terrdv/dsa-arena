@@ -774,6 +774,180 @@ a:hover {
   max-width: 34ch;
 }
 
+/* editor (CodeMirror) + submit toolbar */
+
+.editor-wrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-banner {
+  margin: var(--space-3) var(--space-4) 0;
+}
+
+.editor-cm .cm-editor {
+  background: var(--surface);
+  font-size: 14px;
+  min-height: 420px;
+  max-height: calc(100dvh - 380px);
+}
+
+.editor-cm .cm-scroller {
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  overflow: auto;
+}
+
+.editor-cm .cm-gutters {
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  color: var(--text-3);
+}
+
+.editor-cm .cm-activeLine {
+  background: rgba(34, 197, 94, 0.05);
+}
+
+.editor-cm .cm-activeLineGutter {
+  background: transparent;
+  color: var(--text-2);
+}
+
+.editor-cm .cm-editor.cm-focused {
+  outline: none;
+}
+
+.editor-cm .cm-selectionBackground,
+.editor-cm .cm-editor.cm-focused .cm-selectionBackground {
+  background: rgba(34, 197, 94, 0.18);
+}
+
+.editor-cm .cm-cursor {
+  border-left-color: var(--accent-hi);
+}
+
+.lang-chip {
+  margin-left: auto;
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--muted);
+  color: var(--text-2);
+  text-transform: lowercase;
+}
+
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-3);
+  flex-shrink: 0;
+}
+
+.conn-dot.on {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
+}
+
+.editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.editor-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+
+.judging-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-2);
+}
+
+.spinner-sm {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+.result-badge {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+}
+
+.result-badge.ok {
+  color: var(--accent-hi);
+  border-color: rgba(34, 197, 94, 0.4);
+  background: var(--accent-dim);
+}
+
+.result-badge.bad {
+  color: var(--danger);
+  border-color: rgba(239, 68, 68, 0.4);
+  background: var(--danger-dim);
+}
+
+.judge-failures {
+  padding: var(--space-3) var(--space-4) var(--space-4);
+  border-top: 1px solid var(--border);
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.judge-failures ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.judge-failures li {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--text-2);
+  background: var(--danger-dim);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius);
+  padding: var(--space-2) var(--space-3);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.fighter-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-2);
+  margin-top: 2px;
+}
+
+.fighter-progress svg {
+  color: var(--warn);
+}
+
+.fighter-progress.ok,
+.fighter-progress.ok svg {
+  color: var(--accent-hi);
+}
+
 /* room loading / error states */
 
 .room-state {
