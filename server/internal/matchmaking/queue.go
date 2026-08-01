@@ -5,8 +5,16 @@ import (
 	"sync"
 )
 
+// MatchmakingPayload is what the server sends over a player's queue socket.
+//   - {"type":"match_found","match_id":"..."}   — a match was proposed; respond with {"action":"accept"|"decline"}
+//   - {"type":"match_ready","match_id":"..."}   — both players accepted; the room is live, safe to navigate to it
+//   - {"type":"match_cancelled","reason":"..."} — the proposal fell through; a player who declines isn't sent
+//     this (they already know), so reason is one of: "timeout" (you didn't respond in time),
+//     "opponent_declined", "opponent_timeout", "opponent_disconnected", or "server_error"
 type MatchmakingPayload struct {
-	MatchID string `json:"match_id"`
+	Type    string `json:"type"`
+	MatchID string `json:"match_id,omitempty"`
+	Reason  string `json:"reason,omitempty"`
 }
 
 

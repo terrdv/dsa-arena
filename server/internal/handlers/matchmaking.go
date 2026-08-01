@@ -48,18 +48,23 @@ func JoinQueue(q *matchmaking.Queue) http.HandlerFunc {
 		player := matchmaking.NewPlayer(playerID, conn)
 
 		q.Push(player)
-		go listenForLeave(q, player)
+		go listen(q, player)
 	}
 
 }
 
-
-func listenForLeave(q *matchmaking.Queue, player *matchmaking.Player) {
+// listen reads every message a player sends over their queue socket for the
+// life of the connection: "leave" while queued, and "accept"/"decline" once
+// the matcher has proposed a match and is waiting via Player.AwaitDecision.
+// A read error or close is delivered as "disconnect" in case a decision is
+// pending at the time.
+func listen(q *matchmaking.Queue, player *matchmaking.Player) {
 	for {
 		_, payload, err := player.Conn().ReadMessage()
 		if err != nil {
 			// connection closed/errored — treat as an implicit leave
 			q.Remove(player.PlayerID())
+			player.Deliver("disconnect")
 			return
 		}
 
@@ -70,9 +75,11 @@ func listenForLeave(q *matchmaking.Queue, player *matchmaking.Player) {
 			continue
 		}
 
-		if msg.Action == "leave" {
+		switch msg.Action {
+		case "leave":
 			q.Remove(player.PlayerID())
-			return
+		case "accept", "decline":
+			player.Deliver(msg.Action)
 		}
 	}
 }

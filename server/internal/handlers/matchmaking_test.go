@@ -134,3 +134,43 @@ func TestJoinQueueDisconnectRemovesPlayer(t *testing.T) {
 	}
 	t.Fatalf("expected carol to be removed from the queue after disconnect")
 }
+
+func TestJoinQueueAcceptMessageIsDelivered(t *testing.T) {
+	q := matchmaking.NewQueue()
+	wsURL := newQueueTestServer(t, q)
+
+	conn, _, err := websocket.DefaultDialer.Dial(wsURL+"?player_id=dave", nil)
+	if err != nil {
+		t.Fatalf("dial: %v", err)
+	}
+	defer conn.Close()
+
+	var player *matchmaking.Player
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if p, ok := q.Remove("dave"); ok {
+			player = p
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if player == nil {
+		t.Fatalf("expected dave to be queued")
+	}
+
+	decisions := player.AwaitDecision()
+
+	acceptMsg, _ := json.Marshal(map[string]string{"action": "accept"})
+	if err := conn.WriteMessage(websocket.TextMessage, acceptMsg); err != nil {
+		t.Fatalf("write accept message: %v", err)
+	}
+
+	select {
+	case d := <-decisions:
+		if d != "accept" {
+			t.Fatalf("expected accept, got %q", d)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatalf("expected accept decision to be delivered")
+	}
+}

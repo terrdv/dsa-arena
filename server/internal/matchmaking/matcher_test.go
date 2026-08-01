@@ -49,7 +49,44 @@ func testConnPair(t *testing.T) (server *websocket.Conn, client *websocket.Conn)
 	return serverConn, clientConn
 }
 
-func TestRunMatcherMatchesTwoPlayers(t *testing.T) {
+// relayDecisions mimics handlers.listen: it reads accept/decline actions off
+// a player's server-side conn and forwards them to Player.Deliver, which is
+// how the real websocket handler wires client messages into the matcher's
+// AwaitDecision channels.
+func relayDecisions(player *Player) {
+	for {
+		_, payload, err := player.Conn().ReadMessage()
+		if err != nil {
+			player.Deliver("disconnect")
+			return
+		}
+		var msg struct {
+			Action string `json:"action"`
+		}
+		if err := json.Unmarshal(payload, &msg); err != nil {
+			continue
+		}
+		if msg.Action == "accept" || msg.Action == "decline" {
+			player.Deliver(msg.Action)
+		}
+	}
+}
+
+func readPayload(t *testing.T, conn *websocket.Conn) MatchmakingPayload {
+	t.Helper()
+	conn.SetReadDeadline(time.Now().Add(5 * time.Second))
+	_, raw, err := conn.ReadMessage()
+	if err != nil {
+		t.Fatalf("read message: %v", err)
+	}
+	var mp MatchmakingPayload
+	if err := json.Unmarshal(raw, &mp); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	return mp
+}
+
+func TestRunMatcherMatchesTwoPlayersWhoBothAccept(t *testing.T) {
 	server1, client1 := testConnPair(t)
 	server2, client2 := testConnPair(t)
 
@@ -79,37 +116,46 @@ func TestRunMatcherMatchesTwoPlayers(t *testing.T) {
 	defer cancel()
 	go RunMatcher(ctx, q, rooms, sqldb)
 
-	q.Push(NewPlayer("alice", server1))
-	q.Push(NewPlayer("bob", server2))
+	p1 := NewPlayer("alice", server1)
+	p2 := NewPlayer("bob", server2)
+	go relayDecisions(p1)
+	go relayDecisions(p2)
 
-	client1.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, payload1, err := client1.ReadMessage()
-	if err != nil {
-		t.Fatalf("read from client1: %v", err)
-	}
+	q.Push(p1)
+	q.Push(p2)
 
-	client2.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, payload2, err := client2.ReadMessage()
-	if err != nil {
-		t.Fatalf("read from client2: %v", err)
-	}
+	found1 := readPayload(t, client1)
+	found2 := readPayload(t, client2)
 
-	var mp1, mp2 MatchmakingPayload
-	if err := json.Unmarshal(payload1, &mp1); err != nil {
-		t.Fatalf("unmarshal payload1: %v", err)
+	if found1.Type != "match_found" || found2.Type != "match_found" {
+		t.Fatalf("expected match_found for both, got %q and %q", found1.Type, found2.Type)
 	}
-	if err := json.Unmarshal(payload2, &mp2); err != nil {
-		t.Fatalf("unmarshal payload2: %v", err)
-	}
-
-	if mp1.MatchID == "" {
+	if found1.MatchID == "" {
 		t.Fatalf("expected non-empty match id")
 	}
-	if mp1.MatchID != mp2.MatchID {
-		t.Fatalf("expected both players to receive the same match id, got %q and %q", mp1.MatchID, mp2.MatchID)
+	if found1.MatchID != found2.MatchID {
+		t.Fatalf("expected both players to receive the same match id, got %q and %q", found1.MatchID, found2.MatchID)
 	}
 
-	room, err := rooms.Get(context.Background(), mp1.MatchID)
+	accept, _ := json.Marshal(map[string]string{"action": "accept"})
+	if err := client1.WriteMessage(websocket.TextMessage, accept); err != nil {
+		t.Fatalf("client1 accept: %v", err)
+	}
+	if err := client2.WriteMessage(websocket.TextMessage, accept); err != nil {
+		t.Fatalf("client2 accept: %v", err)
+	}
+
+	ready1 := readPayload(t, client1)
+	ready2 := readPayload(t, client2)
+
+	if ready1.Type != "match_ready" || ready2.Type != "match_ready" {
+		t.Fatalf("expected match_ready for both, got %q and %q", ready1.Type, ready2.Type)
+	}
+	if ready1.MatchID != found1.MatchID {
+		t.Fatalf("expected match_ready to carry the same match id")
+	}
+
+	room, err := rooms.Get(context.Background(), found1.MatchID)
 	if err != nil {
 		t.Fatalf("get room: %v", err)
 	}
@@ -124,6 +170,88 @@ func TestRunMatcherMatchesTwoPlayers(t *testing.T) {
 	}
 	if room.Status != "active" {
 		t.Fatalf("expected status 'active', got %q", room.Status)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("sqlmock expectations: %v", err)
+	}
+}
+
+func TestRunMatcherCancelsAndRequeuesOnDecline(t *testing.T) {
+	server1, client1 := testConnPair(t)
+	server2, client2 := testConnPair(t)
+
+	q := NewQueue()
+
+	mr, err := miniredis.Run()
+	if err != nil {
+		t.Fatalf("start miniredis: %v", err)
+	}
+	t.Cleanup(mr.Close)
+	rdb := redis.NewClient(&redis.Options{Addr: mr.Addr()})
+	t.Cleanup(func() { rdb.Close() })
+	rooms := NewRoomStore(rdb)
+
+	sqldb, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New: %v", err)
+	}
+	t.Cleanup(func() { sqldb.Close() })
+
+	rows := sqlmock.NewRows([]string{"id", "title", "problem_description", "testcases"}).
+		AddRow(int64(7), "Two Sum", "find two numbers", []byte(`[{"input":"[2,7,11,15]","output":"[0,1]"}]`))
+	mock.ExpectQuery(regexp.QuoteMeta("SELECT id, title, problem_description, testcases")).
+		WillReturnRows(rows)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go RunMatcher(ctx, q, rooms, sqldb)
+
+	p1 := NewPlayer("alice", server1)
+	p2 := NewPlayer("bob", server2)
+	go relayDecisions(p1)
+	go relayDecisions(p2)
+
+	q.Push(p1)
+	q.Push(p2)
+
+	found1 := readPayload(t, client1)
+	_ = readPayload(t, client2)
+
+	accept, _ := json.Marshal(map[string]string{"action": "accept"})
+	decline, _ := json.Marshal(map[string]string{"action": "decline"})
+	if err := client1.WriteMessage(websocket.TextMessage, accept); err != nil {
+		t.Fatalf("client1 accept: %v", err)
+	}
+	if err := client2.WriteMessage(websocket.TextMessage, decline); err != nil {
+		t.Fatalf("client2 decline: %v", err)
+	}
+
+	cancelled1 := readPayload(t, client1)
+	if cancelled1.Type != "match_cancelled" || cancelled1.Reason != "opponent_declined" {
+		t.Fatalf("expected match_cancelled/opponent_declined for alice, got %+v", cancelled1)
+	}
+
+	// alice accepted, so she should be back in the queue automatically.
+	deadline := time.Now().Add(2 * time.Second)
+	requeued := false
+	for time.Now().Before(deadline) {
+		if _, ok := q.Remove("alice"); ok {
+			requeued = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !requeued {
+		t.Fatalf("expected alice to be requeued after bob declined")
+	}
+
+	room, err := rooms.Get(context.Background(), found1.MatchID)
+	if err != nil {
+		t.Fatalf("get room: %v", err)
+	}
+	if room != nil {
+		t.Fatalf("expected no room to be created when one player declines")
 	}
 
 	if err := mock.ExpectationsWereMet(); err != nil {

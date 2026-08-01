@@ -402,6 +402,11 @@ a:hover {
   font-size: 14px;
 }
 
+.accept-actions {
+  display: flex;
+  gap: var(--space-3);
+}
+
 /* match found flash */
 
 .match-found {

@@ -90,3 +90,22 @@ export function AlertIcon(props: IconProps) {
     </svg>
   )
 }
+
+/** Checkmark */
+export function CheckIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  )
+}
+
+/** X / close */
+export function XIcon(props: IconProps) {
+  return (
+    <svg {...base} {...props}>
+      <line x1="18" x2="6" y1="6" y2="18" />
+      <line x1="6" x2="18" y1="6" y2="18" />
+    </svg>
+  )
+}

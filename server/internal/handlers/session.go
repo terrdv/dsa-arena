@@ -42,16 +42,6 @@ type sessionServerMsg struct {
 // the life of the match: it runs submissions through the judge, reporting
 // pass/fail counts back to the submitter and a lightweight progress ping to
 // their opponent.
-//
-//  6. hub.Join(matchID, playerID, conn); defer hub.Leave(matchID, playerID, conn).
-//  7. Loop on conn.ReadMessage(), json.Unmarshal into sessionClientMsg,
-//     and dispatch on msg.Type:
-//     - "submit": send "judging", call submission.Judge(ctx, sub, tests),
-//       send "result" to the sender via conn.WriteJSON, then
-//       hub.BroadcastExcept(matchID, playerID, opponentMsg) so the other
-//       player sees a lightweight progress update.
-//     Return from the loop (closing the connection) on any read error —
-//     that's the disconnect path, same as JoinQueue's listenForLeave.
 func RoomSession(rooms *matchmaking.RoomStore, hub *matchmaking.Hub) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		matchID := r.PathValue("match_id")
