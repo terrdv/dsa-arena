@@ -58,21 +58,41 @@ const (
 )
 
 var (
-	pullOnce sync.Once
-	pullErr  error
+	pullMu   sync.Mutex
+	pullDone bool
 )
 
 // ensureImage pulls judgeImage the first time it's needed so that a cold
 // image cache doesn't eat into a test case's execution timeout: without
 // this, the first `docker run` per process would spend its whole budget
-// downloading layers instead of running code.
+// downloading layers instead of running code. A failed pull is not cached —
+// only success is — so a transient failure (daemon not up yet, network
+// blip) doesn't permanently break every submission for the rest of the
+// process's life; the next submission just retries the pull.
 func ensureImage(ctx context.Context) error {
-	pullOnce.Do(func() {
-		pullCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
-		defer cancel()
-		pullErr = exec.CommandContext(pullCtx, "docker", "pull", judgeImage).Run()
-	})
-	return pullErr
+	pullMu.Lock()
+	defer pullMu.Unlock()
+
+	if pullDone {
+		return nil
+	}
+
+	pullCtx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+
+	var errBuf bytes.Buffer
+	cmd := exec.CommandContext(pullCtx, "docker", "pull", judgeImage)
+	cmd.Stderr = &errBuf
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errBuf.String())
+		if msg == "" {
+			return err
+		}
+		return fmt.Errorf("%s: %s", err, msg)
+	}
+
+	pullDone = true
+	return nil
 }
 
 // Judge runs every test case for sub in a single throwaway Docker container
