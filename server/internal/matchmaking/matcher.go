@@ -27,18 +27,25 @@ func RunMatcher(ctx context.Context, q *Queue, rooms *RoomStore, db *sql.DB) {
 		case <-q.Signal():
 		}
 
-		player1, ok := q.Pop()
-		if !ok {
-			continue
-		}
+		// A single wakeup can represent many concurrent Pushes coalesced
+		// into one signal (Queue.signal is a size-1 "there's work" flag,
+		// not a per-push counter) — so drain every available pair here
+		// instead of pairing once and going back to sleep, or players
+		// left over from a coalesced signal would never get matched.
+		for {
+			player1, ok := q.Pop()
+			if !ok {
+				break
+			}
 
-		player2, ok := q.Pop()
-		if !ok {
-			q.Push(player1)
-			continue
-		}
+			player2, ok := q.Pop()
+			if !ok {
+				q.Push(player1)
+				break
+			}
 
-		go proposeMatch(ctx, q, rooms, db, player1, player2)
+			go proposeMatch(ctx, q, rooms, db, player1, player2)
+		}
 	}
 }
 

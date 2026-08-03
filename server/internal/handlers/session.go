@@ -7,6 +7,7 @@ import (
 
 	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
 	"github.com/terrdv/dsa-arena/server/internal/submission"
+	"github.com/terrdv/dsa-arena/server/internal/workers"
 )
 
 const defaultLanguage = "python"
@@ -24,25 +25,20 @@ type sessionClientMsg struct {
 	Language string `json:"language"`
 }
 
-// sessionServerMsg is what the server sends back. Not every field is used
-// by every message type:
-//   - {"type":"judging"}                                            — ack that a submission started running
-//   - {"type":"result","passed":n,"total":n,"failed":["..."]}       — sent to the submitter
-//   - {"type":"opponent_result","passed":n,"total":n}               — sent to the other player, no code/failure detail
-//   - {"type":"error","message":"..."}                              — e.g. unsupported language
+// sessionServerMsg is what the server sends back over this handler
+// directly. The judge's own results ({"type":"result"/"opponent_result"} to
+// the submitter/opponent, {"type":"error"} on a judge failure) are sent by
+// the worker pool once it processes the submission — see workers.CodeTask.
 type sessionServerMsg struct {
-	Type    string   `json:"type"`
-	Passed  int      `json:"passed,omitempty"`
-	Total   int      `json:"total,omitempty"`
-	Failed  []string `json:"failed,omitempty"`
-	Message string   `json:"message,omitempty"`
+	Type    string `json:"type"`
+	Message string `json:"message,omitempty"`
 }
 
 // RoomSession is the websocket endpoint a room's two players hold open for
-// the life of the match: it runs submissions through the judge, reporting
-// pass/fail counts back to the submitter and a lightweight progress ping to
-// their opponent.
-func RoomSession(rooms *matchmaking.RoomStore, hub *matchmaking.Hub) http.HandlerFunc {
+// the life of the match: it queues submissions onto the judge worker pool,
+// which reports pass/fail counts back to the submitter and a lightweight
+// progress ping to their opponent once judging finishes.
+func RoomSession(rooms *matchmaking.RoomStore, hub *matchmaking.Hub, pool *workers.WorkerPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		matchID := r.PathValue("match_id")
 		if matchID == "" {
@@ -112,28 +108,7 @@ func RoomSession(rooms *matchmaking.RoomStore, hub *matchmaking.Hub) http.Handle
 					Language: msg.Language,
 				}
 
-				result, err := submission.Judge(r.Context(), sub, tests)
-				if err != nil {
-					if err := conn.WriteJSON(sessionServerMsg{Type: "error", Message: err.Error()}); err != nil {
-						return
-					}
-					continue
-				}
-
-				if err := conn.WriteJSON(sessionServerMsg{
-					Type:   "result",
-					Passed: len(result.Passed),
-					Total:  len(tests),
-					Failed: result.Failed,
-				}); err != nil {
-					return
-				}
-
-				hub.BroadcastExcept(matchID, playerID, sessionServerMsg{
-					Type:   "opponent_result",
-					Passed: len(result.Passed),
-					Total:  len(tests),
-				})
+				pool.Submit(workers.NewCodeTask(matchID, playerID, sub, tests, hub, conn))
 			}
 		}
 	}

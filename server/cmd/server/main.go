@@ -6,10 +6,11 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/terrdv/dsa-arena/server/internal/database"
-	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
-	"github.com/terrdv/dsa-arena/server/internal/handlers"
 	"github.com/terrdv/dsa-arena/server/internal/cache"
+	"github.com/terrdv/dsa-arena/server/internal/database"
+	"github.com/terrdv/dsa-arena/server/internal/handlers"
+	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
+	"github.com/terrdv/dsa-arena/server/internal/workers"
 )
 
 func main() {
@@ -39,9 +40,13 @@ func main() {
 	rooms := matchmaking.NewRoomStore(redis)
 	hub := matchmaking.NewHub()
 
+	// judge worker pool: bounds how many judge containers run at once
+	pool := workers.NewWorkerPool(8)
+	pool.Start()
+
 	go matchmaking.RunMatcher(context.Background(), queue, rooms, db)
 
-	//initiate multiplexer 
+	//initiate multiplexer
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -51,7 +56,7 @@ func main() {
 	mux.HandleFunc("GET /queue", handlers.JoinQueue(queue))
 
 	mux.HandleFunc("GET /room/{match_id}", handlers.GetRoom(rooms))
-	mux.HandleFunc("GET /room/{match_id}/session", handlers.RoomSession(rooms, hub))
+	mux.HandleFunc("GET /room/{match_id}/session", handlers.RoomSession(rooms, hub, pool))
 
 	log.Printf("listening on :%s", port)
 	if err := http.ListenAndServe(":"+port, mux); err != nil {
