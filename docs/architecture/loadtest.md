@@ -21,14 +21,8 @@ Reported per run:
   `"result"` (even a failing one) still counts as a completed sample, since
   latency is what's being measured, not correctness.
 
-## 3. Closed-loop vs. open-loop
 
-**Closed-loop** (default): a fixed number of simulated players
-(`-matches` × 2), each submitting `-submits` times back-to-back — send,
-wait for the result, immediately send again. Good for finding a pool's
-saturation point (fixed concurrency, hammered as fast as possible), but not
-representative of real traffic: a slow response just delays that player's
-*next* request, which can mask how bad the system actually gets under load.
+## 2. Method
 
 **Open-loop / sustained** (`-duration`, `-stagger`, `-think-min`/
 `-think-max`): matches start at random points spread across a window
@@ -39,7 +33,7 @@ resubmit later). Run long enough and this doubles as a soak test, surfacing
 slow degradation (leaked goroutines, container cleanup failures) that a
 short burst wouldn't.
 
-## 4. Running it
+## 3. Running it
 
 Prerequisites: Postgres, Redis, and the server all running
 (`go run ./cmd/server`), with `DATABASE_URL`/`REDIS_ADDR` set in that
@@ -49,10 +43,6 @@ terminal it runs from, to seed the test problem.
 ```sh
 cd server
 
-# closed-loop / spike: 4 concurrent matches, 20 submits each, back-to-back
-go run ./cmd/loadtest -matches 4 -submits 20
-
-# open-loop / sustained: 100 concurrent matches trickling in over 30s,
 # each player pausing 2-10s between submissions, for 5 minutes
 go run ./cmd/loadtest -matches 100 -duration 5m -stagger 30s -think-min 2s -think-max 10s
 ```
@@ -67,18 +57,3 @@ go run ./cmd/loadtest -matches 100 -duration 5m -stagger 30s -think-min 2s -thin
 | `-think-min`/`-think-max` | `0` | Random pause range between a player's submissions (`0` = back-to-back) |
 | `-dsn` | `$DATABASE_URL` | Postgres DSN for seeding the test problem |
 
-## 5. Reading the output
-
-The judge worker pool (`workers.WorkerPool`, sized in `cmd/server/main.go`)
-bounds how many Docker containers run at once. The diagnostic signature to
-look for when sweeping concurrency past that size: **p50 stays roughly
-flat** (a queued task still only takes as long to *run* once picked up),
-while **p95/p99 climb** as more submissions sit waiting for a free worker.
-Flat median + growing tail means the pool is queueing as designed. If p50
-itself climbs, something other than queueing is degrading (e.g. host
-resource contention across containers).
-
-Container/host resource usage isn't collected by the script — watch
-`docker stats` (or `docker ps --filter name=judge-` for a running count) in
-a separate terminal alongside a run to correlate latency with actual CPU/
-memory pressure.
