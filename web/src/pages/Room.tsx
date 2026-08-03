@@ -22,6 +22,7 @@ import {
   type RoomState,
   type ClientSessionMsg,
   type ServerSessionMsg,
+  type CaseResult,
 } from '../lib/api'
 
 type LoadState =
@@ -33,7 +34,14 @@ type LoadState =
 interface JudgeResult {
   passed: number
   total: number
-  failed: string[]
+  cases: CaseResult[]
+}
+
+const STATUS_LABEL: Record<CaseResult['status'], string> = {
+  pass: 'Passed',
+  fail: 'Wrong answer',
+  error: 'Error',
+  timeout: 'Timed out',
 }
 
 interface OpponentResult {
@@ -147,7 +155,7 @@ export default function Room() {
           break
         case 'result':
           setJudging(false)
-          setMyResult({ passed: msg.passed, total: msg.total, failed: msg.failed ?? [] })
+          setMyResult({ passed: msg.passed, total: msg.total, cases: msg.cases ?? [] })
           break
         case 'opponent_result':
           setOppResult({ passed: msg.passed, total: msg.total })
@@ -360,14 +368,35 @@ export default function Room() {
                   </button>
                 </div>
 
-                {!judging && myResult !== null && myResult.failed.length > 0 && (
-                  <div className="judge-failures">
-                    <p className="section-label">Failed cases</p>
-                    <ul>
-                      {myResult.failed.map((f) => (
-                        <li key={f}>{f}</li>
+                {!judging && myResult !== null && myResult.cases.length > 0 && (
+                  <div className="judge-cases">
+                    <p className="section-label">Test cases</p>
+                    <div className="case-table">
+                      {myResult.cases.map((c) => (
+                        <div className={`case-row${c.passed ? ' ok' : ' bad'}`} key={c.index}>
+                          <div className="case-row-head">
+                            <span className="case-name">Case {c.index + 1}</span>
+                            <span className={`case-status${c.passed ? ' ok' : ' bad'}`}>
+                              {STATUS_LABEL[c.status]}
+                            </span>
+                          </div>
+                          <div className="case-row-body">
+                            <div>
+                              <span className="case-field-label">Input</span>
+                              <code>{c.input}</code>
+                            </div>
+                            <div>
+                              <span className="case-field-label">Expected</span>
+                              <code>{c.expected}</code>
+                            </div>
+                            <div>
+                              <span className="case-field-label">Actual</span>
+                              <code>{c.actual}</code>
+                            </div>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 )}
               </div>

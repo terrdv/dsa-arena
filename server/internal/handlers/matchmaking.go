@@ -2,14 +2,13 @@ package handlers
 
 import (
 	"encoding/json"
-	"net/http"
-	"log"
 	"fmt"
+	"log"
+	"net/http"
 
 	"github.com/gorilla/websocket"
 	"github.com/terrdv/dsa-arena/server/internal/matchmaking"
 )
-
 
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  0,
@@ -78,12 +77,9 @@ func listen(q *matchmaking.Queue, player *matchmaking.Player) {
 		switch msg.Action {
 		case "leave":
 			q.Remove(player.PlayerID())
+			player.Conn().Close()
 		case "accept", "decline":
 			player.Deliver(msg.Action)
 		}
 	}
 }
-
-
-	
-

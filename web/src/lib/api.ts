@@ -35,9 +35,20 @@ export function queueSocketURL(playerId: string): string {
 
 export type ClientSessionMsg = { type: 'submit'; code: string; language: string }
 
+export type CaseStatus = 'pass' | 'fail' | 'error' | 'timeout'
+
+export interface CaseResult {
+  index: number
+  input: string
+  expected: string
+  actual: string
+  passed: boolean
+  status: CaseStatus
+}
+
 export type ServerSessionMsg =
   | { type: 'judging' }
-  | { type: 'result'; passed: number; total: number; failed: string[] }
+  | { type: 'result'; passed: number; total: number; cases: CaseResult[] }
   | { type: 'opponent_result'; passed: number; total: number }
   | { type: 'error'; message: string }
 

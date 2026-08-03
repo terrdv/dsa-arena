@@ -6,6 +6,23 @@ import (
 	"time"
 )
 
+func logCases(t *testing.T, result Result) {
+	for _, c := range result.Cases {
+		t.Logf("case %d: status=%s input=%q expected=%q actual=%q", c.Index+1, c.Status, c.Input, c.Expected, c.Actual)
+	}
+}
+
+func countCases(result Result) (passed, failed int) {
+	for _, c := range result.Cases {
+		if c.Passed {
+			passed++
+		} else {
+			failed++
+		}
+	}
+	return passed, failed
+}
+
 // Smoke test for the batched-container rewrite — hits real Docker. Not meant
 // to stay in the suite long-term; just here to confirm the harness script
 // actually runs correctly end to end.
@@ -31,14 +48,14 @@ func TestJudgeSmoke(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Judge returned error: %v", err)
 	}
-	t.Logf("Passed: %v", result.Passed)
-	t.Logf("Failed: %v", result.Failed)
+	logCases(t, result)
 
-	if len(result.Passed) != 1 {
-		t.Errorf("expected 1 pass, got %d", len(result.Passed))
+	passed, failed := countCases(result)
+	if passed != 1 {
+		t.Errorf("expected 1 pass, got %d", passed)
 	}
-	if len(result.Failed) != 1 {
-		t.Errorf("expected 1 failure, got %d", len(result.Failed))
+	if failed != 1 {
+		t.Errorf("expected 1 failure, got %d", failed)
 	}
 }
 
@@ -62,14 +79,14 @@ func TestJudgeSmokeCrash(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Judge returned error: %v", err)
 	}
-	t.Logf("Passed: %v", result.Passed)
-	t.Logf("Failed: %v", result.Failed)
+	logCases(t, result)
 
-	if len(result.Passed) != 0 {
-		t.Errorf("expected 0 passes for a crashing submission, got %d", len(result.Passed))
+	passed, failed := countCases(result)
+	if passed != 0 {
+		t.Errorf("expected 0 passes for a crashing submission, got %d", passed)
 	}
-	if len(result.Failed) != 2 {
-		t.Errorf("expected both cases marked failed, got %d", len(result.Failed))
+	if failed != 2 {
+		t.Errorf("expected both cases marked failed, got %d", failed)
 	}
 }
 
@@ -99,9 +116,10 @@ func TestJudgeSmokeTimeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Judge returned error: %v", err)
 	}
-	t.Logf("Failed: %v", result.Failed)
+	logCases(t, result)
 
-	if len(result.Failed) != 1 {
-		t.Fatalf("expected 1 failed (timeout) case, got %d", len(result.Failed))
+	_, failed := countCases(result)
+	if failed != 1 {
+		t.Fatalf("expected 1 failed (timeout) case, got %d", failed)
 	}
 }

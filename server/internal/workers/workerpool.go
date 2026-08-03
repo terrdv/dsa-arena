@@ -35,11 +35,21 @@ func NewCodeTask(matchID, playerID string, sub submission.Submission, tests []su
 // the room websocket, so a pool-judged result looks identical to the client
 // as a synchronously-judged one.
 type resultMsg struct {
-	Type    string   `json:"type"`
-	Passed  int      `json:"passed,omitempty"`
-	Total   int      `json:"total,omitempty"`
-	Failed  []string `json:"failed,omitempty"`
-	Message string   `json:"message,omitempty"`
+	Type    string                  `json:"type"`
+	Passed  int                     `json:"passed"`
+	Total   int                     `json:"total"`
+	Cases   []submission.CaseResult `json:"cases,omitempty"`
+	Message string                  `json:"message,omitempty"`
+}
+
+func passedCount(cases []submission.CaseResult) int {
+	n := 0
+	for _, c := range cases {
+		if c.Passed {
+			n++
+		}
+	}
+	return n
 }
 
 func (t *CodeTask) processTask(ctx context.Context) {
@@ -51,14 +61,14 @@ func (t *CodeTask) processTask(ctx context.Context) {
 
 	_ = t.conn.WriteJSON(resultMsg{
 		Type:   "result",
-		Passed: len(result.Passed),
+		Passed: passedCount(result.Cases),
 		Total:  len(t.tests),
-		Failed: result.Failed,
+		Cases:  result.Cases,
 	})
 
 	t.hub.BroadcastExcept(t.matchID, t.playerID, resultMsg{
 		Type:   "opponent_result",
-		Passed: len(result.Passed),
+		Passed: passedCount(result.Cases),
 		Total:  len(t.tests),
 	})
 }

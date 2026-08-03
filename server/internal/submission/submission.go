@@ -29,10 +29,29 @@ type TestCase struct {
 	Output string `json:"output"`
 }
 
+// CaseStatus is the outcome of a single test case.
+type CaseStatus string
+
+const (
+	StatusPass    CaseStatus = "pass"
+	StatusFail    CaseStatus = "fail"
+	StatusError   CaseStatus = "error"
+	StatusTimeout CaseStatus = "timeout"
+)
+
+// CaseResult is one test case's outcome, carrying enough detail for a client
+// to show input/expected/actual side by side rather than just a pass count.
+type CaseResult struct {
+	Index    int        `json:"index"`
+	Input    string     `json:"input"`
+	Expected string     `json:"expected"`
+	Actual   string     `json:"actual"`
+	Passed   bool       `json:"passed"`
+	Status   CaseStatus `json:"status"`
+}
+
 type Result struct {
-	Passed []string
-	Failed []string
-	Err    error
+	Cases []CaseResult
 }
 
 const (
@@ -126,7 +145,7 @@ func Judge(ctx context.Context, sub Submission, tests []TestCase) (Result, error
 		return Result{}, err
 	}
 
-	return parseJudgeOutput(stdout, crashDetail, len(tests)), nil
+	return parseJudgeOutput(stdout, crashDetail, tests), nil
 }
 
 // runSubmission spins up a single throwaway container running every test
@@ -190,15 +209,16 @@ func runSubmission(ctx context.Context, code string, tests []TestCase) (stdout, 
 }
 
 // parseJudgeOutput turns the harness's stdout (one result line per test
-// case it reached, in order) into a Result covering all n tests. Any test
-// index the harness never reported — because the whole run crashed or timed
-// out before getting to it — is filled in with crashDetail so every test
-// still gets an entry.
-func parseJudgeOutput(stdout, crashDetail string, n int) Result {
+// case it reached, in order) into a Result covering every test, each paired
+// with its original input/expected output. Any test index the harness never
+// reported — because the whole run crashed or timed out before getting to
+// it — is filled in with crashDetail so every test still gets an entry.
+func parseJudgeOutput(stdout, crashDetail string, tests []TestCase) Result {
 	type parsedCase struct {
 		kind   string
 		detail string
 	}
+	n := len(tests)
 	found := make(map[int]parsedCase, n)
 
 	for line := range strings.SplitSeq(stdout, "\n") {
@@ -222,31 +242,39 @@ func parseJudgeOutput(stdout, crashDetail string, n int) Result {
 	}
 
 	var result Result
-	for i := range n {
-		label := fmt.Sprintf("case %d", i+1)
+	for i, tc := range tests {
+		cr := CaseResult{Index: i, Input: tc.Input, Expected: tc.Output}
 
 		pc, ok := found[i]
 		if !ok {
-			detail := crashDetail
-			if detail == "" {
-				detail = "no output from judge harness"
+			cr.Status = StatusError
+			cr.Actual = crashDetail
+			if cr.Actual == "" {
+				cr.Actual = "no output from judge harness"
 			}
-			result.Failed = append(result.Failed, fmt.Sprintf("%s: %s", label, detail))
+			result.Cases = append(result.Cases, cr)
 			continue
 		}
 
 		switch pc.kind {
 		case passMarker:
-			result.Passed = append(result.Passed, label)
+			cr.Status = StatusPass
+			cr.Passed = true
+			cr.Actual = pc.detail
 		case failMarker:
-			result.Failed = append(result.Failed, fmt.Sprintf("%s: got %s", label, pc.detail))
+			cr.Status = StatusFail
+			cr.Actual = pc.detail
 		case errMarker:
-			result.Failed = append(result.Failed, fmt.Sprintf("%s: error: %s", label, pc.detail))
+			cr.Status = StatusError
+			cr.Actual = pc.detail
 		case timeoutMarker:
-			result.Failed = append(result.Failed, fmt.Sprintf("%s: timed out", label))
+			cr.Status = StatusTimeout
+			cr.Actual = "timed out"
 		default:
-			result.Failed = append(result.Failed, fmt.Sprintf("%s: unrecognized judge output", label))
+			cr.Status = StatusError
+			cr.Actual = "unrecognized judge output"
 		}
+		result.Cases = append(result.Cases, cr)
 	}
 
 	return result
@@ -327,10 +355,11 @@ for _i, (_input, _output) in enumerate(_tests):
         _args = eval("dict(" + _input + ")")
         _result = solve(**_args)
         _expected = eval(_output)
+        _detail = base64.b64encode(repr(_result).encode()).decode()
         if _result == _expected:
-            print("%s " + str(_i))
+            print("%s " + str(_i) + " " + _detail)
         else:
-            print("%s " + str(_i) + " " + base64.b64encode(repr(_result).encode()).decode())
+            print("%s " + str(_i) + " " + _detail)
     except _JudgeTimeout:
         print("%s " + str(_i))
     except Exception as _e:
