@@ -3,7 +3,7 @@
 
 ## 1. The one job: match room state
 
-Redis holds exactly one thing: the live state of an active match, via
+Redis holds the live state of an active match, via
 `RoomStore` (`server/internal/matchmaking/room.go`).
 
 - Every match gets a key `room:{matchID}` → a JSON blob of both player IDs,
@@ -18,24 +18,15 @@ Redis holds exactly one thing: the live state of an active match, via
   websocket connects, to validate they belong to the match and load the
   problem/test cases.
 
-## 2. Why Redis and not just an in-memory map
-
-`Hub` and `Queue` prove you *can* share state across goroutines with just an
-in-memory map + mutex — no Redis required for that alone. Room data is
-different for reasons specific to what it is:
+## 2. Why Redis
 
 - **TTL cleanup for free.** Redis's `SET ... EX` gives auto-expiration
   natively. An in-memory map would need its own sweeper goroutine to get the
   same "abandoned matches clean themselves up" behavior.
-- **Survives a server restart — the real differentiator.** If the process
+- **Survives a server restart.** If the process
   redeploys or crashes mid-match, an in-memory room map is wiped instantly;
   a player hitting refresh (`GET /room/{match_id}`) would hit a dead end.
-  Redis-backed room state survives that. `Hub` and `Queue` genuinely
-  *can't* benefit the same way even in principle — their data (a live
-  WebSocket connection, a player waiting in queue) is inherently tied to a
-  live TCP socket that dies with the process regardless of where its
-  metadata lives. Room data (player IDs, problem, test cases) isn't tied to
-  the socket, so it's the one piece of state actually worth persisting.
+  Redis-backed room state survives.
 - **Multi-instance readiness** — not relevant yet on a single server, but
   if more than one server process ever ran, an in-memory map is invisible
   across processes; only an external shared store lets two instances see
@@ -53,20 +44,3 @@ Assuming Redis itself stays up and only the Go process restarts:
 - Rejoining `/room/{match_id}/session` — `RoomSession` re-reads the room
   from Redis and `Hub.Join` just creates a fresh entry in the (now-empty)
   in-memory `Hub`; nothing about rejoining depends on old Hub state.
-
-**Doesn't survive:**
-- **No auto-reconnect.** The frontend's websocket effect (`Room.tsx`)
-  doesn't retry on its own — `onclose`/`onerror` just show "refresh the
-  page to reconnect." The room is there to rejoin, but the player has to
-  manually refresh.
-- **Pass/fail progress.** `myResult`/`oppResult` are plain React state,
-  never persisted server-side — a player who had "3/5 passing" before the
-  crash sees a blank slate after reconnecting (their *code* survives, via
-  the separate localStorage draft, unrelated to the server).
-- **Any submission in flight at the moment of the crash.** No durable job
-  tracking — if a judge container was mid-run when the process died, that
-  result is just gone; the player has to resubmit.
-
-So: the match isn't destroyed and reconnecting works, but it isn't
-transparent — the player loses in-progress judging state and has to
-manually refresh and possibly resubmit.
